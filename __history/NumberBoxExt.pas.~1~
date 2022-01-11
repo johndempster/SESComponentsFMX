@@ -1,0 +1,30 @@
+unit NumbersBoxExt;
+
+interface
+
+uses
+  System.SysUtils, System.Classes, FMX.Types, FMX.Controls,
+  FMX.Controls.Presentation, FMX.Edit;
+
+type
+  TNumberBoxExt = class(TCustomEdit)
+  private
+    { Private declarations }
+  protected
+    { Protected declarations }
+  public
+    { Public declarations }
+  published
+    { Published declarations }
+  end;
+
+procedure Register;
+
+implementation
+
+procedure Register;
+begin
+  RegisterComponents('Samples', [TNumberBoxExt]);
+end;
+
+end.
