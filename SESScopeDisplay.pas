@@ -132,12 +132,13 @@ unit SESScopeDisplay;
   04.11.16 ... JD ADCZero and cursors position properties now single type rather than integer
   03.07.19 ... JD ?yd1 and ?yd2 1 and 2 fixed decimal place cursor readout format added
   01.04.20 .... JD FMX component created
+  17.01.22 .... JD Now uses System.IOUtils.TPath functions to get temporary file name and path
   }
 
 interface
 
 uses
-  Windows, Messages, SysUtils, Classes, mmsystem, math, strutils, types, System.uitypes, FMX.Objects, FMX.Graphics, FMX.Types, fmx.controls,
+  System.IOUtils{,Windows}, Messages, SysUtils, Classes, mmsystem, math, strutils, types, System.uitypes, FMX.Objects, FMX.Graphics, FMX.Types, fmx.controls,
   FMX.Dialogs  ;
 const
      ScopeChannelLimit = 31 ;
@@ -283,7 +284,7 @@ type
 //    FLinePen : TPen ;
     { Display storage mode internal variables }
     FStorageMode : Boolean ;
-    FStorageFileName : Array[0..255] of char ;
+    FStorageFileName : String ; //Array[0..255] of char ;
     FStorageFile : TFileStream ;
 
     FStorageList : Array[0..MaxStoredRecords-1] of Integer ; // storage mode list
@@ -727,7 +728,8 @@ begin
      FTitle := TStringList.Create ;
 
      { Create an empty line array }
-     for i := 0 to High(FLines) do begin
+     for i := 0 to High(FLines) do
+       begin
        FLines[i].Channel := 0 ;
        FLines[i].X := Nil ;
        FLines[i].Y := Nil ;
@@ -862,7 +864,8 @@ begin
         if FLines[i].y <> Nil then  Dispose(FLines[i].y) ;
         end;
 
-     if FStorageFile <> Nil then begin
+     if FStorageFile <> Nil then
+        begin
         FStorageFile.Destroy ;
         DeleteFile( FStorageFileName ) ;
         FStorageFile := Nil ;
@@ -885,7 +888,6 @@ var
 
    SaveColor : TAlphaColor ;
    KeepPen : TStrokeBrush ;
-   TempPath : Array[0..255] of Char ;
    KeepColor : Array[0..ScopeChannelLimit] of TAlphaColor ;
    InList : Boolean ;
    OldNumPoints : Integer ;
@@ -933,9 +935,7 @@ begin
            if FStorageFile = Nil then
               begin
               { Get path to temporary file directory }
-              GetTempPath( High(TempPath), TempPath ) ;
-              { Create a temp file name }
-              GetTempFileName( TempPath, pFilePrefix, 0, FStorageFileName ) ;
+              FStorageFileName := System.IOUtils.TPath.GetTempPath ;
               FStorageFile := TFileStream.Create( FStorageFileName, fmCreate ) ;
               end ;
 
@@ -946,7 +946,8 @@ begin
            FStorageFile.Write( FBuf^, NumBytesPerRecord ) ;
 
            { Change colour of stored records }
-           for ch := 0 to FNumChannels-1 do begin
+           for ch := 0 to FNumChannels-1 do
+               begin
                KeepColor[Ch] := Channel[Ch].Color ;
                Channel[Ch].Color := TAlphaColors.Aqua ;
                end ;
@@ -998,9 +999,11 @@ begin
 //        Self.Canvas.DrawBitmap( BackBitMap, DrawRect, DrawRect, 100.0, True );
 
        { Plot external line on selected channel }
-       for i := 0 to High(FLines) do if (FLines[i].Count > 0) then begin
+       for i := 0 to High(FLines) do if (FLines[i].Count > 0) then
+          begin
           iChan := FLines[i].Channel ;
-          if Channel[iChan].InUse then begin
+          if Channel[iChan].InUse then
+             begin
              KeepPen.Assign(BackBitmap.Canvas.Stroke) ;
              BackBitmap.Canvas.Stroke.Assign(FLines[i].Pen) ;
              for j := 0 to FLines[i].Count-1 do
@@ -1083,7 +1086,7 @@ procedure TScopeDisplay.PlotRecord(
   Plot a signal record on to a canvas
   ----------------------------------- }
 var
-   ch,n,i,j,k,iStep,iPlot : Integer ;
+   ch,i,j,iStep,iPlot : Integer ;
    XPix,iYMin,iYMax : Single ;
    XPixRange : Single ;
    YMin,YMax,y : single ;
@@ -1124,6 +1127,8 @@ begin
          repeat
 
              y := GetSample( FBuf, j, FNumBytesPerSample, FFloatingPointSamples ) ;
+
+
 
              if y < Ymin then
                 begin
@@ -1376,7 +1381,8 @@ begin
 
          yRange := yScaledMax - yScaledMin ;
          TickBase := 0.01*exp(Round(Log10(Abs(yRange)))*ln(10.0)) ;
-         for i := 0 to High(TickMultipliers) do begin
+         for i := 0 to High(TickMultipliers) do
+             begin
              YTickSize := TickBase*TickMultipliers[i] ;
              if (yRange/YTickSize) <= 10 then Break ;
              end ;
@@ -1390,7 +1396,8 @@ begin
          // Plot ticks
          YTick := YTickMin ;
          iTick := 0 ;
-         while iTick < NumTicks do begin
+         while iTick < NumTicks do
+             begin
 
              yPix := YToCanvasCoord( Channel[ch],
                                     (YTick/Channel[ch].ADCScale) + Channel[ch].ADCZero ) ;
@@ -1442,7 +1449,8 @@ begin
 
      XRange := XScaledMax - XScaledMin ;
      TickBase := 0.01*exp(Round(Log10(Abs(xRange)))*ln(10.0)) ;
-     for i := 0 to High(TickMultipliers) do begin
+     for i := 0 to High(TickMultipliers) do
+         begin
          XTickSize := TickBase*TickMultipliers[i] ;
          if (XRange/XTickSize) <= 10 then Break ;
          end ;
@@ -1713,7 +1721,8 @@ begin
            and (iCursor < High(HorCursors)) do Inc(iCursor) ;
 
     { Attach the cursor to a channel }
-    if iCursor <= High(HorCursors) then begin
+    if iCursor <= High(HorCursors) then
+       begin
        HorCursors[iCursor] := Channel[iChannel] ;
        HorCursors[iCursor].Position := 0 ;
        HorCursors[iCursor].InUse := True ;
@@ -1723,10 +1732,11 @@ begin
        HorCursors[iCursor].ADCName := CursorText ;
        Result := iCursor ;
        end
-    else begin
-         { Return -1 if no cursors available }
-         Result := -1 ;
-         end ;
+    else
+       begin
+       { Return -1 if no cursors available }
+       Result := -1 ;
+       end ;
     end ;
 
 
@@ -1760,7 +1770,8 @@ begin
      Canv.Stroke.Thickness := 1.0 ;
 
      // If fixed zero levels flag set, set channel zero level to 0
-     if FFixZeroLevels and HorCursors[iCurs].ZeroLevel then begin
+     if FFixZeroLevels and HorCursors[iCurs].ZeroLevel then
+        begin
         HorCursors[iCurs].Position := 0 ;
         end ;
 
@@ -1781,7 +1792,8 @@ begin
         Channel[HorCursors[iCurs].ChanNum].ADCZero := HorCursors[iCurs].Position ;
 
      // Plot cursor label
-     if HorCursors[iCurs].ADCName <> '' then begin
+     if HorCursors[iCurs].ADCName <> '' then
+        begin
         X1 := HorCursors[iCurs].Right  ;
         X0 := X1 - Canv.TextWidth(HorCursors[iCurs].ADCName)-2.0 ;
         Y1 := yPix ;
@@ -1829,7 +1841,8 @@ begin
            and (iCursor < High(VertCursors)) do Inc(iCursor) ;
 
     { Attach the cursor to a channel }
-    if iCursor <= High(VertCursors) then begin
+    if iCursor <= High(VertCursors) then
+       begin
        VertCursors[iCursor] := Channel[0] ;
        VertCursors[iCursor].ChanNum := Chan ;
        VertCursors[iCursor].Position := FNumPoints div 2 ;
@@ -1896,49 +1909,57 @@ begin
      // Plot cursor label
 
      // Display signal value at cursor
-     if VertCursors[iCurs].ChanNum < 0 then begin
+     if VertCursors[iCurs].ChanNum < 0 then
+        begin
         StartCh := 0 ;
         EndCh := FNumChannels-1 ;
         end
-     else begin
-       StartCh := VertCursors[iCurs].ChanNum ;
-       EndCh := VertCursors[iCurs].ChanNum ;
-       end ;
+     else
+        begin
+        StartCh := VertCursors[iCurs].ChanNum ;
+        EndCh := VertCursors[iCurs].ChanNum ;
+        end ;
 
      // Select channel to be used to display time
      TChan := 0 ;
      for ch := StartCh to EndCh do if Channel[ch].InUse then TChan := ch ;
 
-     for ch := StartCh to EndCh do if Channel[ch].InUse then begin
+     for ch := StartCh to EndCh do if Channel[ch].InUse then
+         begin
          // Get cursor name
          s := VertCursors[iCurs].ADCName ;
 
          // Cursor signal level reading
          j := (Round(VertCursors[iCurs].Position)*FNumChannels) + Channel[ch].ADCOffset ;
-         if (j >= 0) and (j < (FMaxPoints*FNumChannels)) and (FBuf <> Nil) then begin
+         if (j >= 0) and (j < (FMaxPoints*FNumChannels)) and (FBuf <> Nil) then
+            begin
             y := GetSample( FBuf, j, FNumBytesPerSample, FFloatingPointSamples ) ;
             end
          else y := 0 ;
 
          // Display time
 
-         if ANSIContainsText(VertCursors[iCurs].ADCName,'?t0') and (ch = TChan) then begin
+         if ANSIContainsText(VertCursors[iCurs].ADCName,'?t0') and (ch = TChan) then
+            begin
             // Display time relative to cursor 0
             s := s + format('t=%6.5g, ',[(VertCursors[iCurs].Position
                                         - VertCursors[0].Position)*FTScale]) ;
             end
-         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?t') and (ch = TChan) then begin
+         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?t') and (ch = TChan) then
+            begin
             // Display time relative to start of record
             s := s + format('t=%6.5g, ',[(VertCursors[iCurs].Position + FXOffset)*FTScale]) ;
             end ;
 
          // Display sample index
-         if ANSIContainsText(VertCursors[iCurs].ADCName,'?i') then begin
+         if ANSIContainsText(VertCursors[iCurs].ADCName,'?i') then
+            begin
             s := s + format('i=%.0f, ',[VertCursors[iCurs].Position]) ;
             end ;
 
          // Display signal level
-         if ANSIContainsText(VertCursors[iCurs].ADCName,'?y0') then begin
+         if ANSIContainsText(VertCursors[iCurs].ADCName,'?y0') then
+            begin
             // Display signal level (relative to cursor 0)
             j := Round(VertCursors[0].Position)*FNumChannels + Channel[ch].ADCOffset ;
             if (j >= 0) and (j < (FMaxPoints*FNumChannels)) and (FBuf <> Nil) then begin
@@ -1947,20 +1968,23 @@ begin
             else yz := 0 ;
             s := s + format('%6.5g %s',[(y-yz)*Channel[ch].ADCScale,Channel[ch].ADCUnits]) ;
             end
-         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?yd1') then begin
-            // Display signal level (relative to baseline)
+         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?yd1') then
+              begin
+             // Display signal level (relative to baseline)
               yz := Channel[ch].ADCZero ;
               s := s + format('%.1f %s',[(y-yz)*Channel[ch].ADCScale,Channel[ch].ADCUnits]) ;
               s := AnsiReplaceText(s,'?yd1','') ;
               end
-         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?yd2') then begin
-            // Display signal level (relative to baseline)
+         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?yd2') then
+              begin
+              // Display signal level (relative to baseline)
               yz := Channel[ch].ADCZero ;
               s := s + format('%.2f %s',[(y-yz)*Channel[ch].ADCScale,Channel[ch].ADCUnits]) ;
               s := AnsiReplaceText(s,'?yd2','') ;
               end
-         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?y') then begin
-            // Display signal level (relative to baseline)
+         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?y') then
+              begin
+              // Display signal level (relative to baseline)
               yz := Channel[ch].ADCZero ;
               s := s + format('%6.5g %s',[(y-yz)*Channel[ch].ADCScale,Channel[ch].ADCUnits]) ;
               end ;
@@ -2856,7 +2880,7 @@ procedure TScopeDisplay.MouseMove(
   Select/deselect cursors as mouse is moved over display
   -------------------------------------------------------}
 var
-   ch,i : Integer ;
+   ch : Integer ;
    HorizontalChanged : Boolean ; // Horizontal cursor changed flag
    VerticalChanged : Boolean ;   // Vertical cursor changed flag
    BetweenChannels : Boolean ;
