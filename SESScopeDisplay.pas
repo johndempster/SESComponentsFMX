@@ -3646,7 +3646,7 @@ begin
        { Draw baseline levels }
        if FPrinterShowZeroLevels then begin
           Printer.Canvas.Stroke.Dash := TStrokeDash.Dot ;
-          Printer.Canvas.StrokeThickness := 1 ;
+  //        Printer.Canvas.StrokeThickness := 1 ;
           for ch := 0 to FNumChannels-1 do if PrChan[ch].InUse then
               begin
               YPix := YToCanvasCoord( PrChan[ch], PrChan[ch].ADCZero ) ;
