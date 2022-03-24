@@ -11,12 +11,13 @@ unit SESNumberBox;
   23/7/13 .... Conditional compile for DECIMALSEPARATOR (V7) and formatsettings.DECIMALSEPARATOR (XE2+)
   31/1/14 .... KeyPress (beep on CR removed)
   01.04.20 ... FMX component
+  24.03.22 ... JD Windows dependencies removed, CharInSet replaces In
   }
 
 interface
 
 uses
-  Windows, Messages, SysUtils, Classes,
+  SysUtils, Classes,
   strutils, FMX.Edit ;
 
 type
@@ -295,7 +296,7 @@ begin
      NumberFound := False ;
      i := 1 ;
      repeat
-         if CBuf[i] in ['0'..'9', 'E', 'e', '+', '-', '.', ',' ] then begin
+         if CharInSet( CBuf[i], ['0'..'9', 'E', 'e', '+', '-', '.', ',' ]) then begin
             CNum := CNum + CBuf[i] ;
             NumberFound := True ;
             end

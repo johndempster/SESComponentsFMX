@@ -133,12 +133,13 @@ unit SESScopeDisplay;
   03.07.19 ... JD ?yd1 and ?yd2 1 and 2 fixed decimal place cursor readout format added
   01.04.20 .... JD FMX component created
   17.01.22 .... JD Now uses System.IOUtils.TPath functions to get temporary file name and path
+  24.03.22 ... JD Windows dependencies removed
   }
 
 interface
 
 uses
-  System.IOUtils{,Windows}, Messages, SysUtils, Classes, mmsystem, math, strutils, types, System.uitypes, FMX.Objects, FMX.Graphics, FMX.Types, fmx.controls,
+  System.IOUtils, SysUtils, Classes, math, strutils, types, System.uitypes, FMX.Objects, FMX.Graphics, FMX.Types, fmx.controls,
   FMX.Dialogs  ;
 const
      ScopeChannelLimit = 31 ;
