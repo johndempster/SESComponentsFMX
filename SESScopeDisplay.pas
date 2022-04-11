@@ -324,6 +324,8 @@ type
 
     PrinterException : Boolean ;
 
+    nPainted : Integer ;
+
     { -- Property read/write methods -------------- }
 
     procedure SetNumChannels(Value : Integer ) ;
@@ -460,8 +462,6 @@ type
     procedure MouseDown( Button: TMouseButton; Shift: TShiftState; X, Y: Single ); override ;
 
     procedure MouseUp(Button: TMouseButton;Shift: TShiftState; X, Y: Single ); override ;
-    procedure DblClick ; override ;
-    procedure Click ; override ;
 //    procedure Invalidate ; override ;
   public
     { Public declarations }
@@ -836,6 +836,8 @@ begin
     NumZoomButtons := 0 ;
     PrinterException := False ;
 
+    nPainted := 0 ;
+
     end ;
 
 
@@ -1075,6 +1077,7 @@ begin
 //        Self.Canvas.EndScene() ;
         end ;
 
+
      end ;
 
 
@@ -1095,10 +1098,10 @@ var
    FirstPoint : Boolean ;
 begin
 
+
      // Exit if no buffer
      if FBuf = Nil then Exit ;
      if NumPoints <= 1 then Exit ;
-
 
      Canv.BeginScene();
 
@@ -1207,9 +1210,9 @@ begin
 procedure TScopeDisplay.PlotAxes(
           Canv : TCanvas               // Canvas to be cleared
           ) ;
-{ ---------------------------
-  Clear signal display canvas
-  ---------------------------}
+{ -----------------------------------------
+  Clear signal display canvas and draw axes
+  -----------------------------------------}
 const
     TickSize = 4 ;
     ButtonSize  = 14 ;
@@ -1260,7 +1263,7 @@ begin
      Canv.Font.Size := FFontSize ;
      ChannelSpacing :=  Canv.TextHeight('X') + 1  ;
      AvailableHeight := Height - ((NumInUse+1)*ChannelSpacing)
-                        - 2*Canv.TextHeight('X')
+                        - 3*Canv.TextHeight('X')
                         - ((FNumChannels - NumInUse)*ButtonSize)
                         - 4 - ButtonSize ;
 
@@ -1644,7 +1647,7 @@ begin
          begin
          x := Integer(FMarkerText.Objects[i]) ;
          X0 := XToCanvasCoord( Channel[LastActiveChannel], x ) ;
-         Y0 := Height - ((i Mod 2)+1)*Canv.TextHeight(FMarkerText.Strings[i]) ;
+         Y0 := Height - ((i Mod 2)+2.5)*Canv.TextHeight(FMarkerText.Strings[i]) ;
          X1 := X0 + Canv.TextWidth(FMarkerText.Strings[i])  ;
          Y1 := Y0 + Canv.TextHeight(FMarkerText.Strings[i])  ;
          Canv.FillText( RectF(X0,Y0,X1,Y1),FMarkerText.Strings[i],False,100.0,[],TTextAlign.Leading) ;
@@ -2822,14 +2825,14 @@ begin
      ProcessZoomBox ;
 
      // Check zoom buttons and change display magnification
-//     CheckZoomButtons ;
+     CheckZoomButtons ;
 
      // Update space occupied by channel
-     UpdateChannelYSize( X, Y ) ;
+//     UpdateChannelYSize( X, Y ) ;
 
      FMouseDown := False ;
 
-//     Self.Repaint ;
+     Self.Repaint ;
 
      end ;
 
@@ -2926,37 +2929,7 @@ begin
 
         end ;
 
-//     Self.Repaint ;
      end ;
-
-
-procedure TScopeDisplay.DblClick ;
-{ -------------------------------------------------
-  Handle events activated by double mouse clicks
-  -------------------------------------------------}
-begin
-
-//     CheckZoomButtons ;
-     //Self.Canvas.DrawRect( ,0.0,0.0,TCorners.Allcorners,),);
-     end ;
-
-
-procedure TScopeDisplay.Click ;
-{ ----------------------------------------
-  Handle events activated by mouse clicks
-  ----------------------------------------}
-begin
-
-     // Check state of display zoom buttons
-     CheckZoomButtons ;
-     Canvas.BeginScene() ;
-//     Canvas.DrawRect( RectF(0.0,0.0,10.0,10.0), 0.0, 0.0, AllCorners , 100.0 );
-     Canvas.EndScene ;
-
-     end ;
-
-
-
 
 
 procedure TScopeDisplay.ZoomIn(
@@ -4297,13 +4270,16 @@ begin
 
 
 procedure TScopeDisplay.DrawZoomButton(
-          var CV : TCanvas ;
-          X : Single ;
-          Y : Single ;
-          Size : Single ;
-          ButtonType : Integer ;
-          ChanNum : Integer
+          var CV : TCanvas ;              // Canvas to draw on
+          X : Single ;                    // left edge of button
+          Y : Single ;                    // Top of button
+          Size : Single ;                 // Button edge size
+          ButtonType : Integer ;          // Type of button
+          ChanNum : Integer               // Display channel
           ) ;
+// ------------------------
+// Draw display zoom button
+// ------------------------
 var
     SavedPen : TStrokeBrush ;
     XMid,YMid,HalfSize : Single ;
@@ -4393,6 +4369,9 @@ var
     XRange,YRange : Single ;
 begin
 
+
+//    Channel[0].yMax := Channel[0].yMax*0.9 ;
+
     for i := 0 to NumZoomButtons-1 do
         begin
         if (MouseX >= ZoomButtonList[i].Rect.Left) and
@@ -4400,11 +4379,13 @@ begin
            (MouseY >= ZoomButtonList[i].Rect.Top) and
            (MouseY <= ZoomButtonList[i].Rect.Bottom) then
            begin
+
            ChanNum := ZoomButtonList[i].ChanNum ;
            case ZoomButtonList[i].ButtonType of
 
              cZoomInButton :
                   begin
+                  Channel[0].YMax := Channel[0].YMax*0.9 ;
                   if ChanNum >= 0 then Self.YZoom( ChanNum, -50.0 )
                                   else Self.XZoom( -50.0 ) ;
                   end ;
@@ -4468,8 +4449,8 @@ begin
                  end ;
              end ;
            DisplayCursorsOnly := False ;
-           Self.InvalidateRect( DisplayRect ) ;
-           Self.Repaint ;
+//           Self.InvalidateRect( DisplayRect ) ;
+//           Self.Repaint ;
            end ;
         end ;
     end ;
@@ -4483,7 +4464,7 @@ var
     i : Integer ;
     FillBrush : TBrush ;
 begin
-
+    exit ;
     Canvas.Stroke.Color := TAlphaColors.Black ;
 
     FillBrush := TBrush.Create( TBrushKind.Solid, TAlphaColors.Gray );
