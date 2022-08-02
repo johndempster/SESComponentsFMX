@@ -134,6 +134,8 @@ unit SESScopeDisplay;
   01.04.20 .... JD FMX component created
   17.01.22 .... JD Now uses System.IOUtils.TPath functions to get temporary file name and path
   24.03.22 ... JD Windows dependencies removed
+  13.04.22 ... JD Channel names and units now located correctly
+  02.07.22 ... JD AddVerticalCursor() adn AddHorizontalCursor() colour now defined by TAlphaColor constant
   }
 
 interface
@@ -469,13 +471,13 @@ type
     Destructor Destroy ; override ;
     procedure ClearHorizontalCursors ;
     function AddHorizontalCursor( iChannel : Integer ;
-                                  Color : TColor ;
+                                  Color : TAlphaColor ;
                                   UseAsZeroLevel : Boolean ;
                                   CursorText : String
                                   ) : Integer ;
     procedure ClearVerticalCursors ;
     function AddVerticalCursor( Chan : Integer ;
-                                Color : TColor ;
+                                Color : TAlphaColor ;
                                 CursorText : String ) : Integer ;
     procedure MoveActiveVerticalCursor( Step : Integer ) ;
     procedure LinkVerticalCursors( C0 : Integer ; C1 : Integer ) ;
@@ -1530,6 +1532,7 @@ begin
          begin
 
          Canv.Stroke.Color := TAlphaColors.Black ; //Channel[ch].Color ;
+         Canv.Stroke.Dash := TStrokeDash.Solid ;
 //         Canv.Font.Color := clBlack ;
 
          iSlashPos := Pos('/', Channel[ch].ADCName ) ;
@@ -1542,7 +1545,7 @@ begin
          X1 := XLeft  ;
          X0 := X1 - Canv.TextWidth(s+'x') - 1.0 ;
          Y1 := yMid ;
-         Y0 := Y1 + Canv.TextHeight(s) + 1.0 ;
+         Y0 := Y1 - Canv.TextHeight(s) + 1.0 ;
          Canv.FillText( RectF(X0,Y0,X1,Y1),s,False,100.0,[],TTextAlign.Leading) ;
 
          if iSlashPos > 0  then
@@ -1562,8 +1565,8 @@ begin
             s := Channel[ch].ADCUnits ;
             X1 := XLeft  ;
             X0 := X1 - Canv.TextWidth(s+'x') - 1.0 ;
-            Y1 := yMid ;
-            Y0 := Y1 + Canv.TextHeight(s) + 1.0 ;
+            Y0 := yMid ;
+            Y1 := Y0 + Canv.TextHeight(s) + 1.0 ;
             Canv.FillText( RectF(X0,Y0,X1,Y1),s,False,100.0,[],TTextAlign.Leading) ;
             end ;
 
@@ -1709,7 +1712,7 @@ begin
 
 function TScopeDisplay.AddHorizontalCursor(
          iChannel : Integer ;       { Signal channel associated with cursor }
-         Color : TColor ;           { Colour of cursor }
+         Color : TAlphaColor ;           { Colour of cursor }
          UseAsZeroLevel : Boolean ;  { If TRUE indicates this is a zero level cursor }
          CursorText : String       // Cursor label text
          ) : Integer ;
@@ -1830,7 +1833,7 @@ begin
 
 function TScopeDisplay.AddVerticalCursor(
          Chan : Integer ;                { Signal channel (-1=all channels) }
-         Color : TColor ;                 { Cursor colour }
+         Color : TAlphaColor ;                 { Cursor colour }
          CursorText : String             // Text label at bottom of cursor
          ) : Integer ;
 { --------------------------------------------
