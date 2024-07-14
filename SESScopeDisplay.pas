@@ -136,13 +136,18 @@ unit SESScopeDisplay;
   24.03.22 ... JD Windows dependencies removed
   13.04.22 ... JD Channel names and units now located correctly
   02.07.22 ... JD AddVerticalCursor() adn AddHorizontalCursor() colour now defined by TAlphaColor constant
+  25.04.23 .. JD Canv.Stroke.Dash := TStrokeDash.Dash changed to Canv.Stroke.Dash := TStrokeDash.Solid
+                 because rendering dashed lines 10-20 times slower than solid.
+  09.07.24 .. JD Horizontal zero cursors now solid black rather than green
+  12.07.24 .. JD Time calibration bar and annotations now printed in full.
+                 Channels labels now fully visible in clipboard image
   }
 
 interface
 
 uses
   System.IOUtils, SysUtils, Classes, math, strutils, types, System.uitypes, FMX.Objects, FMX.Graphics, FMX.Types, fmx.controls,
-  FMX.Dialogs  ;
+  FMX.Dialogs , mmsystem, System.Math.vectors ;
 const
      ScopeChannelLimit = 31 ;
      AllChannels = -1 ;
@@ -246,7 +251,7 @@ type
     FBottomOfDisplayArea : Single ;
     FBuf : Pointer ;
     FNumBytesPerSample : Integer ;
-    FFloatingPointSamples : Boolean ; // TRue = floating point samples                                                                                                   hickness
+    FFloatingPointSamples : Boolean ; // TRue = floating point samples
 
     FCursorsEnabled : Boolean ;
     FHorCursorActive : Boolean ;
@@ -508,8 +513,8 @@ type
 
     procedure ClearLines ;
 
-    procedure DisplayNewPoints( NewPoints : Integer ) ;
-
+    procedure DisplayNewPoints( NewPoints : Integer ;
+                                NewPointsOnly : Boolean ) ;
 
     procedure AddMarker ( AtPoint : Integer ; Text : String ) ;
     procedure ClearMarkers ;
@@ -718,12 +723,8 @@ begin
      Width := 200 ;
      Height := 150 ;
 
-     BackBitmap := TBitMap.Create ;
-     ForeBitmap := TBitMap.Create ;
-     BackBitmap.Width := Round(Width) ;
-     BackBitmap.Height := Round(Height) ;
-     ForeBitmap.Width := Round(Width) ;
-     ForeBitmap.Height := Round(Height) ;
+     BackBitmap := TBitMap.Create(Round(Width),Round(Height)) ;
+     ForeBitmap := TBitMap.Create(Round(Width),Round(Height)) ; ;
 
 //     Canvas.Bitmap.SetSize( Round(Width), Round(Height) ) ;
 
@@ -751,7 +752,7 @@ begin
      FBackgroundColor := TAlphaColors.White ;
      FCursorColor := TAlphaColors.Navy ;
      FNonZeroHorizontalCursorColor := TAlphaColors.Red ;
-     FZeroHorizontalCursorColor := TAlphaColors.Green ;
+     FZeroHorizontalCursorColor := TAlphaColors.Black ;
 
      FMouseDown := False ;
 
@@ -911,15 +912,17 @@ begin
 
      try
 
+//      Draw background canvas with axes & signal traces
+
         BackBitmap.Canvas.BeginScene() ;
 
         // Make bit map same size as control
         if (BackBitmap.Width <> Width) or (BackBitmap.Height <> Height) then
            begin
-           BackBitmap.Width := Round(Width) ;
-           BackBitmap.Height := Round(Height) ;
-           ForeBitmap.Width := Round(Width) ;
-           ForeBitmap.Height := Round(Height) ;
+           BackBitmap.Free ;
+           ForeBitMap.Free ;
+           BackBitmap := TBitMap.Create(Round(Width),Round(Height)) ;
+           ForeBitmap := TBitMap.Create(Round(Width),Round(Height)) ; ;
            end ;
 
         DisplayRect := Rect(0,0,Round(Width)-1,Round(Height)-1) ;
@@ -931,10 +934,11 @@ begin
         BackBitmap.Canvas.Fill.Color := FBackgroundColor ;
 
         // Clear display, add grid and labels
-        if (not DisplayNewPointsOnly) and (not DisplayCursorsOnly) then PlotAxes( BackBitmap.Canvas ) ;
+        if ((not DisplayNewPointsOnly) and (not DisplayCursorsOnly)) then PlotAxes( BackBitmap.Canvas ) ;
 
         { Display records in storage list }
-        if FStorageMode and (not DisplayNewPointsOnly) then begin
+        if FStorageMode and (not DisplayNewPointsOnly) then
+           begin
 
            { Create a temporary storage file, if one isn't already open }
            if FStorageFile = Nil then
@@ -1025,12 +1029,14 @@ begin
 
         BackBitmap.Canvas.EndScene ;
 
-        // Add cursors or zoom box
-        { Horizontal Cursors }
+        // Add background to foreground canvas
         ForeBitMap.Assign(BackBitMap) ;
+
+        // Draw foreground canvas with user-draggable cursors
 
         ForeBitMap.Canvas.BeginScene() ;
 
+        // Horizontal cursors
         for i := 0 to High(HorCursors) do if HorCursors[i].InUse
             and Channel[HorCursors[i].ChanNum].InUse then DrawHorizontalCursor(ForeBitmap.Canvas,i) ;
 
@@ -1055,12 +1061,10 @@ begin
              // Display zoom rectangle
         if FMouseDown then
            begin
-//           ForeBitMap.Canvas.BeginScene() ;
            FillBrush := TBrush.Create( TBrushKind.Solid, TAlphaColors.Gray );
            ForeBitMap.Canvas.FillRect( ZoomRect,0.0,0.0,AllCorners , 0.5, FillBrush );
            FillBrush.Free ;
            end ;
-
 
         ForeBitMap.Canvas.EndScene ;
 
@@ -1071,12 +1075,10 @@ begin
         DisplayCursorsOnly := False ;
 
         { Notify a change in cursors }
-        if Assigned(OnCursorChange) and
-          (not FCursorChangeInProgress) then OnCursorChange(Self) ;
+        if Assigned(OnCursorChange) and (not FCursorChangeInProgress) then OnCursorChange(Self) ;
 
      finally
         KeepPen.Free ;
-//        Self.Canvas.EndScene() ;
         end ;
 
 
@@ -1092,12 +1094,12 @@ procedure TScopeDisplay.PlotRecord(
   Plot a signal record on to a canvas
   ----------------------------------- }
 var
-   ch,i,j,iStep,iPlot : Integer ;
-   XPix,iYMin,iYMax : Single ;
+   ch,i,j,iStep,iPlot,t0,np,ip,ipEnd : Integer ;
+   XPix,iYMin,iYMax,y1,y2 : Single ;
    XPixRange : Single ;
    YMin,YMax,y : single ;
    P0,P1,P2 : TPointF ;
-   FirstPoint : Boolean ;
+   Polyline : TPolygon ;
 begin
 
 
@@ -1119,23 +1121,28 @@ begin
 
          XPixRange := Min( XToCanvasCoord( Channels[ch], iEnd ), Channels[ch].Right )
                       - Max( XToCanvasCoord( Channels[ch], iStart ), Channels[ch].Left ) ;
-         XPixRange := Max(XPixRange,1) ;
+         XPixRange := Max(XPixRange,2) ;
 
          i := iStart ;
          j := (i*FNumChannels) + Channels[ch].ADCOffset ;
-         iStep := Max((iEnd - iStart) div Round(XPixRange*2),1) ;
+         iStep := Max((iEnd - iStart) div Round(XPixRange),1) ;
+         np := ((iEnd - iStart + 1) div iStep)*2 ;
+         ipEnd := np - 1 ;
+         ip := 0 ;
+
          iPlot := iStart ;
          iYMin := 0 ;
          iYMax := 1 ;
          YMin := 1E30 ;
          YMax := -YMin ;
-         FirstPoint := True ;
+
+         SetLength( Polyline, np ) ;
+
          repeat
 
              y := GetSample( FBuf, j, FNumBytesPerSample, FFloatingPointSamples ) ;
 
-
-
+             // Determine min/max for iStep points this segment
              if y < Ymin then
                 begin
                 iYMin := i ;
@@ -1147,35 +1154,37 @@ begin
                 YMax := y ;
                 end;
 
+             // Plot min-max line for segment
+
              if i = iPlot then begin
                 XPix := XToCanvasCoord( Channels[ch], i ) ;
+
                 if iYMin < iYMax then
                    begin
-                   P1.y := YToCanvasCoord( Channels[ch], yMin) ;
-                   P1.x := XPix ;
-                   P2.y := YToCanvasCoord( Channels[ch], yMax) ;
-                   P2.x := XPix ;
+                   y1 := yMin ;
+                   y2 := yMax ;
                    Channels[ch].xLast := i ;
                    Channels[ch].yLast := yMax ;
                    end
                 else
                    begin
-                   P1.y := YToCanvasCoord( Channels[ch], yMax) ;
-                   P1.x := XPix ;
-                   P2.y := YToCanvasCoord( Channels[ch], yMin) ;
-                   P2.x := XPix ;
+                   y1 := yMax ;
+                   y2 := yMin ;
                    Channels[ch].xLast := i ;
                    Channels[ch].yLast := yMin ;
                    end ;
 
-                if FirstPoint then
+                if ip < np then
                    begin
-                   P0 := P1 ;
-                   FirstPoint := False ;
-                   end;
-                Canv.DrawLine( P0, P1, 100.0 ) ;
-                Canv.DrawLine( P1, P2, 100.0 ) ;
-                P0 := P2 ;
+                   PolyLine[ip].y := YToCanvasCoord( Channels[ch], y1) ;
+                   PolyLine[ip].x := XPix ;
+                   Canv.DrawLine( Polyline[Max(ip-1,0)],Polyline[ip], 100.0 );
+                   Inc(ip) ;
+                   PolyLine[ip].y := YToCanvasCoord( Channels[ch], y2) ;
+                   PolyLine[ip].x := XPix ;
+                   Canv.DrawLine( Polyline[Max(ip-1,0)],Polyline[ip], 100.0 );
+                   Inc(ip) ;
+                   end ;
 
                 YMin := 1E30 ;
                 YMax := -YMin ;
@@ -1205,7 +1214,9 @@ begin
             end ;
          end ;
 
+
      Canv.EndScene ;
+
      end ;
 
 
@@ -1413,9 +1424,7 @@ begin
              if FDrawGrid then
                 begin
                 Canv.Stroke.Color := FGridColor ;
-                Canv.Stroke.Dash := TStrokeDash.Dot ;
                 Canv.DrawLine( PointF(Channel[ch].Left + TickSize, yPix), PointF(Channel[ch].Right, yPix), 100.0)  ;
-                Canv.Stroke.Dash := TStrokeDash.Solid ;
                 end ;
 
              // Display min/max values
@@ -1444,6 +1453,7 @@ begin
              end ;
 
          end ;
+
 
      // Draw vertical ticks/grid line
 //     Canv.Font.Color := clBlack ;
@@ -1477,8 +1487,6 @@ begin
 
         xPix := Round((XTick - XScaledMin)*dx) + Channel[0].Left ;
 
-//        Canv.Stroke.Color := clBlack ;
-
         // X axis
         Canv.DrawLine( PointF(Channel[0].Left, XAxisAt), PointF(Channel[0].Right, XAxisAt), 100.0)  ;
 
@@ -1489,12 +1497,10 @@ begin
         if FDrawGrid then
            begin
            Canv.Stroke.Color := FGridColor ;
-           Canv.Stroke.Dash := TStrokeDash.Dot ;
            for ch := 0 to FNumChannels-1 do if Channel[ch].InUse then
                begin
                Canv.DrawLine( PointF(xPix, Channel[ch].Top), PointF(xPix, Channel[ch].Bottom), 100.0)  ;
                end ;
-           Canv.Stroke.Dash := TStrokeDash.Solid ;
            end ;
 
         // Display tick value
@@ -1520,7 +1526,6 @@ begin
 
      // Draw vertical axis
      Canv.Stroke.Color := KeepColor ;
-     Canv.Stroke.Dash := TStrokeDash.Solid ;
      for ch := 0 to FNumChannels-1 do if Channel[ch].InUse then
          begin
          Canv.DrawLine( PointF(Channel[ch].Left, Channel[ch].Top), PointF(Channel[ch].Left, Channel[ch].Bottom), 100.0)  ;
@@ -1532,7 +1537,6 @@ begin
          begin
 
          Canv.Stroke.Color := TAlphaColors.Black ; //Channel[ch].Color ;
-         Canv.Stroke.Dash := TStrokeDash.Solid ;
 //         Canv.Font.Color := clBlack ;
 
          iSlashPos := Pos('/', Channel[ch].ADCName ) ;
@@ -1645,12 +1649,13 @@ begin
 
          end ;
 
+
      // Marker text
      for i := 0 to FMarkerText.Count-1 do
          begin
          x := Integer(FMarkerText.Objects[i]) ;
          X0 := XToCanvasCoord( Channel[LastActiveChannel], x ) ;
-         Y0 := Height - ((i Mod 2)+2.5)*Canv.TextHeight(FMarkerText.Strings[i]) ;
+         Y0 := Height - ((i Mod 2)+2.0)*Canv.TextHeight(FMarkerText.Strings[i]) ;
          X1 := X0 + Canv.TextWidth(FMarkerText.Strings[i])  ;
          Y1 := Y0 + Canv.TextHeight(FMarkerText.Strings[i])  ;
          Canv.FillText( RectF(X0,Y0,X1,Y1),FMarkerText.Strings[i],False,100.0,[],TTextAlign.Leading) ;
@@ -1662,14 +1667,15 @@ begin
 
 
 procedure TScopeDisplay.DisplayNewPoints(
-          NewPoints : Integer
+          NewPoints : Integer ;              // No. of new points
+          NewPointsOnly : Boolean            // TRUE = Only plot new points
           ) ;
 { -----------------------------------------
   Plot a new block of A/D samples of display
   -----------------------------------------}
 begin
 
-     DisplayNewPointsOnly := True ;
+     DisplayNewPointsOnly := NewPointsOnly ;
      FNewNumPoints := NewPoints ;
      Self.Repaint ;
      end ;
@@ -1773,7 +1779,7 @@ begin
      OldPen.Assign(Canv.Stroke) ;
 
      // Settings for cursor
-     Canv.Stroke.Dash := TStrokeDash.Dash ;
+     Canv.Stroke.Dash := TStrokeDash.Dot ;// TStrokeDash.Dash ;
      Canv.Stroke.Thickness := 1.0 ;
 
      // If fixed zero levels flag set, set channel zero level to 0
@@ -2181,6 +2187,7 @@ procedure TScopeDisplay.SetYMin(
   ------------------------- }
 begin
      if (ch < 0) or (ch > ScopeChannelLimit) then Exit ;
+
      Channel[Ch].YMin := Max(Value,FMinADCValue) ;
      if Channel[Ch].YMin = Channel[Ch].YMax then
         Channel[Ch].YMax := Channel[Ch].YMin + 1.0 ;
@@ -2196,9 +2203,11 @@ procedure TScopeDisplay.SetYMax(
   ------------------------- }
 begin
      if (ch < 0) or (ch > ScopeChannelLimit) then Exit ;
+
      Channel[Ch].YMax := Min(Value,FMaxADCValue) ;
      if Channel[Ch].YMin = Channel[Ch].YMax then
         Channel[Ch].YMax := Channel[Ch].YMin + 1.0 ;
+
      end ;
 
 
@@ -3540,11 +3549,9 @@ begin
         for ch := 0 to FNumChannels-1 do if Channel[ch].InUse then
             begin
             Lab := Channel[ch].ADCName + ' ' ;
-            if (LeftMarginShift < Printer.Canvas.TextWidth(Lab)) then
-                LeftMarginShift := Printer.Canvas.TextWidth(Lab) ;
+            if (LeftMarginShift < Printer.Canvas.TextWidth(Lab)) then LeftMarginShift := Printer.Canvas.TextWidth(Lab) ;
             Lab := format( ' %6.5g %s ', [Channel[ch].CalBar,Channel[ch].ADCUnits] ) ;
-            if (LeftMarginShift < Printer.Canvas.TextWidth(Lab)) then
-                LeftMarginShift := Printer.Canvas.TextWidth(Lab) ;
+            if (LeftMarginShift < Printer.Canvas.TextWidth(Lab)) then LeftMarginShift := Printer.Canvas.TextWidth(Lab) ;
             end ;
 
         { Define display area for each channel in use }
@@ -3563,10 +3570,8 @@ begin
                 PrChan[ch].Bottom := PrChan[ch].Top + ChannelHeight ;
                 PrChan[ch].xMin := FXMin ;
                 PrChan[ch].xMax := FXMax ;
-                PrChan[ch].xScale := (PrChan[ch].Right - PrChan[ch].Left) /
-                                     (PrChan[ch].xMax - PrChan[ch].xMin ) ;
-                PrChan[ch].yScale := (PrChan[ch].Bottom - PrChan[ch].Top) /
-                                     (PrChan[ch].yMax - PrChan[ch].yMin ) ;
+                PrChan[ch].xScale := (PrChan[ch].Right - PrChan[ch].Left) / (PrChan[ch].xMax - PrChan[ch].xMin ) ;
+                PrChan[ch].yScale := (PrChan[ch].Bottom - PrChan[ch].Top) / (PrChan[ch].yMax - PrChan[ch].yMin ) ;
                 cTop := cTop + ChannelHeight ;
                 end ;
              end ;
@@ -3645,9 +3650,7 @@ begin
               Bar.Left := PrChan[ch].Left - Printer.Canvas.TextWidth(Lab+' ')*0.5 ;
               Bar.Right := Bar.Left + Printer.Canvas.TextWidth('X') ;
               Bar.Bottom := PrChan[ch].Bottom ;
-              Bar.Top := Bar.Bottom
-                         - Abs( Round((PrChan[ch].CalBar*PrChan[ch].yScale)
-                                    /PrChan[ch].ADCScale) ) ;
+              Bar.Top := Bar.Bottom - Abs( Round((PrChan[ch].CalBar*PrChan[ch].yScale)/PrChan[ch].ADCScale) ) ;
               { Draw vertical bar with T's at each end }
               Printer.Canvas.DrawLine( PointF(Bar.Left ,  Bar.Bottom),
                                        PointF(Bar.Right , Bar.Bottom), 100.0 ) ;
@@ -3664,27 +3667,27 @@ begin
               end ;
 
           { Draw horizontal time calibration bar }
-          Lab := format( '%.4g %s', [FTCalBar*FTScale,FTUnits] ) ;
-          { Calculate position/size of bar }
+          Lab := format( '%.4g %s', [FTCalBar{*FTScale},FTUnits] ) ;
+
+          { Calculate position/size of bar (below last displayed channel)}
           LastCh := 0 ;
           for ch := 0 to FNumChannels-1 do if Channel[ch].InUse then begin
               Bar.Top := PrChan[ch].Bottom + Printer.Canvas.TextHeight(Lab)*3 ;
               LastCh := ch ;
               end ;
+
+          { Draw horizontal bar with T's at each end }
           Bar.Bottom := Bar.Top + Printer.Canvas.TextHeight(Lab)*0.5;
           Bar.Left := PrChan[LastCh].Left ;
-          Bar.Right := Bar.Left + Abs(Round(FTCalBar*PrChan[LastCh].xScale)) ;
-          { Draw horizontal bar with T's at each end }
-          Printer.Canvas.DrawLine( PointF(Bar.Left,Bar.Bottom),
-                                   PointF(Bar.Left , Bar.Top), 100.0 ) ;
-          Printer.Canvas.DrawLine( PointF(Bar.Right , Bar.Bottom),
-                                   PointF(Bar.Right , Bar.Top), 100.0 ) ;
+          Bar.Right := Bar.Left + Abs(Round((FTCalBar/FTScale)*PrChan[LastCh].xScale)) ;
+          Printer.Canvas.DrawLine( PointF(Bar.Left,Bar.Bottom),PointF(Bar.Left , Bar.Top), 100.0 ) ;
+          Printer.Canvas.DrawLine( PointF(Bar.Right , Bar.Bottom),PointF(Bar.Right , Bar.Top), 100.0 ) ;
           Printer.Canvas.DrawLine( PointF(Bar.Left,(Bar.Top + Bar.Bottom)*0.5),
                                    PointF(Bar.Right,(Bar.Top + Bar.Bottom)*0.5), 100.0 ) ;
           { Draw bar label }
-          X0 := PrChan[0].Left ;
-          X1 := X0 + Printer.Canvas.TextWidth(Lab)*0.25 ;
-          Y0 := prChan[0].Bottom + Printer.Canvas.TextHeight(Lab)*0.25 ;
+          X0 := Bar.Right + + Printer.Canvas.TextWidth(' ') ;
+          X1 := X0 + Printer.Canvas.TextWidth(Lab) ;
+          Y0 := Bar.Top ;
           Y1 := Y0 + Printer.Canvas.TextHeight(Lab) ;
           Printer.Canvas.FillText( RectF(X0,Y0,X1,Y1),Lab,False,100.0,[],TTextAlign.Leading) ;
 
@@ -3692,7 +3695,7 @@ begin
           for i := 0 to FMarkerText.Count-1 do
               begin
               X0 := XToCanvasCoord( PrChan[LastCh], Integer(FMarkerText.Objects[i]) ) ;
-              X1 := X0 + Printer.Canvas.TextWidth(FMarkerText.Strings[i])*0.25 ;
+              X1 := X0 + Printer.Canvas.TextWidth(FMarkerText.Strings[i]) ;
               Y0 := PrChan[LastCh].Bottom +((i Mod 2)+1)*Printer.Canvas.TextHeight(FMarkerText.Strings[i]) ;
               Y1 := Y0 + Printer.Canvas.TextHeight(FMarkerText.Strings[i]) ;
               Printer.Canvas.FillText( RectF(X0,Y0,X1,Y1),FMarkerText.Strings[i],
@@ -3739,9 +3742,7 @@ var
 begin
 
      { Create plotting points array }
-//     New(xy) ;
      DefaultPen := TStrokeBrush.Create( TBrushKind.Solid, TAlphaColors.Black ) ;
-//     Cursor := crHourglass ;
 
      { Create Windows CopyImage object }
      BitMap := TBitMap.Create ;
@@ -3776,7 +3777,6 @@ begin
             BitMap.Height := FCopyImageHeight ;
             { ** NOTE ALSO The above two lines MUST come
               BEFORE the setting of the plot margins next }
-
 
             // Determine number of channels in use
              NumInUse := 0 ;
@@ -3839,9 +3839,8 @@ begin
                    X1 := MFChan[ch].Left ;
                    X0 := X1 - BitMap.Canvas.TextWidth(Lab) ;
                    Y0 := (MFChan[ch].Top + MFChan[ch].Bottom)*0.5  ;
-                   Y1 := Y0 + Printer.Canvas.TextHeight(Lab) ;
-                   Printer.Canvas.FillText( RectF(X0,Y0,X1,Y1),Lab,
-                                            False,100.0,[],TTextAlign.Leading) ;
+                   Y1 := Y0 + Bitmap.Canvas.TextHeight(Lab) ;
+                   BitMap.Canvas.FillText( RectF(X0,Y0,X1,Y1),Lab,False,100.0,[],TTextAlign.Leading) ;
                    end ;
                end ;
 
@@ -3902,6 +3901,7 @@ begin
                for ch := 0 to FNumChannels-1 do
                    if MFChan[ch].InUse and (MFChan[ch].CalBar <> 0.0) then
                    begin
+
                    { Bar label }
                    Lab := format( '%6.5g %s ', [MFChan[ch].CalBar,MFChan[ch].ADCUnits] ) ;
                    { Calculate position/size of bar }
@@ -3925,7 +3925,7 @@ begin
                    end ;
 
                { Draw horizontal time calibration bar }
-               Lab := format( ' %.4g %s', [FTCalBar*FTScale,FTUnits] ) ;
+               Lab := format( ' %.4g %s', [FTCalBar{*FTScale},FTUnits] ) ;
                { Calculate position/size of bar }
                LastCh := 0 ;
                for ch := 0 to FNumChannels-1 do if Channel[ch].InUse then
@@ -3935,7 +3935,7 @@ begin
                    end ;
                Bar.Bottom := Bar.Top + BitMap.Canvas.TextHeight(Lab) ;
                Bar.Left := MFChan[LastCh].Left ;
-               Bar.Right := Bar.Left + Round(FTCalBar*MFChan[LastCh].xScale) ;
+               Bar.Right := Bar.Left + Round((FTCalBar/FTScale)*MFChan[LastCh].xScale) ;
                { Draw horizontal bar with T's at each end }
                BitMap.Canvas.DrawLine( PointF(Bar.Left,  Bar.Bottom),
                                        PointF(Bar.Left , Bar.Top), 100.0 ) ;
@@ -3944,7 +3944,7 @@ begin
                BitMap.Canvas.DrawLine( PointF(Bar.Left, (Bar.Top + Bar.Bottom)*0.5),
                                        PointF(Bar.Right,(Bar.Top + Bar.Bottom)*0.5), 100.0 ) ;
                { Draw bar label }
-               X0 := Bar.Right ;
+               X0 := Bar.Right + BitMap.Canvas.TextWidth(' ');
                X1 := X0 + BitMap.Canvas.TextWidth(Lab) ;
                Y0 := Bar.Top ;
                Y1 := Y0 + BitMap.Canvas.TextHeight(Lab) ;
