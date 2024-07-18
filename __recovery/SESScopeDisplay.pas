@@ -1096,7 +1096,7 @@ procedure TScopeDisplay.PlotRecord(
   Plot a signal record on to a canvas
   ----------------------------------- }
 var
-   ch,i,j,iStep,iPlot,t0 : Integer ;
+   ch,i,j,iStep,iPlot : Integer ;
    XPix,iYMin,iYMax,y1,y2 : Single ;
    XPixRange : Single ;
    YMin,YMax,y : single ;
