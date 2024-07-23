@@ -143,6 +143,7 @@ unit SESScopeDisplay;
                  Channels labels now fully visible in clipboard image
   14.07.24 .. JD Printer.Canvas.BeginScene & Printer.Canvas.EndScene now encloses
                  ALL PRINTER DRAWINGa
+  23.07.24 .. JD Whole BackBitMap drawing now skipped when DisplayCursorsOnly flag set
   }
 
 interface
@@ -916,6 +917,9 @@ begin
 
 //      Draw background canvas with axes & signal traces
 
+      if not DisplayCursorsOnly then
+        begin
+
         BackBitmap.Canvas.BeginScene() ;
 
         // Make bit map same size as control
@@ -936,7 +940,7 @@ begin
         BackBitmap.Canvas.Fill.Color := FBackgroundColor ;
 
         // Clear display, add grid and labels
-        if ((not DisplayNewPointsOnly) and (not DisplayCursorsOnly)) then PlotAxes( BackBitmap.Canvas ) ;
+        if (not DisplayNewPointsOnly) then PlotAxes( BackBitmap.Canvas ) ;
 
         { Display records in storage list }
         if FStorageMode and (not DisplayNewPointsOnly) then
@@ -1009,27 +1013,29 @@ begin
 //        DrawRect := RectF(0.0,0.0,Width-1.0,Height-1.0);
 //        Self.Canvas.DrawBitmap( BackBitMap, DrawRect, DrawRect, 100.0, True );
 
-       { Plot external line on selected channel }
-       for i := 0 to High(FLines) do if (FLines[i].Count > 0) then
-          begin
-          iChan := FLines[i].Channel ;
-          if Channel[iChan].InUse then
-             begin
-             KeepPen.Assign(BackBitmap.Canvas.Stroke) ;
-             BackBitmap.Canvas.Stroke.Assign(FLines[i].Pen) ;
-             for j := 0 to FLines[i].Count-1 do
-                  begin
-                  P0.x := XToCanvasCoord( Channel[iChan], FLines[i].x^[j-1] ) ;
-                  P0.y := YToCanvasCoord( Channel[iChan], FLines[i].y^[j-1] ) ;
-                  P1.x := XToCanvasCoord( Channel[iChan], FLines[i].x^[j] ) ;
-                  P1.y := YToCanvasCoord( Channel[iChan], FLines[i].y^[j] ) ;
-                  BackBitmap.Canvas.DrawLine( P0, P1, 100.0 ) ;
-                  end ;
-             BackBitmap.Canvas.Stroke.Assign(KeepPen) ;
-             end ;
-          end ;
+        { Plot external line on selected channel }
+        for i := 0 to High(FLines) do if (FLines[i].Count > 0) then
+            begin
+            iChan := FLines[i].Channel ;
+            if Channel[iChan].InUse then
+               begin
+               KeepPen.Assign(BackBitmap.Canvas.Stroke) ;
+               BackBitmap.Canvas.Stroke.Assign(FLines[i].Pen) ;
+               for j := 0 to FLines[i].Count-1 do
+                   begin
+                   P0.x := XToCanvasCoord( Channel[iChan], FLines[i].x^[j-1] ) ;
+                   P0.y := YToCanvasCoord( Channel[iChan], FLines[i].y^[j-1] ) ;
+                   P1.x := XToCanvasCoord( Channel[iChan], FLines[i].x^[j] ) ;
+                   P1.y := YToCanvasCoord( Channel[iChan], FLines[i].y^[j] ) ;
+                   BackBitmap.Canvas.DrawLine( P0, P1, 100.0 ) ;
+                   end ;
+               BackBitmap.Canvas.Stroke.Assign(KeepPen) ;
+               end ;
+            end ;
 
         BackBitmap.Canvas.EndScene ;
+
+        end ;
 
         // Add background to foreground canvas
         ForeBitMap.Assign(BackBitMap) ;
@@ -1244,7 +1250,7 @@ var
    iTick, NumTicks,iSlashPos : Integer ;
    FillBrush : TBrush ;
 begin
-
+    log.d('PlotAXes');
      Canv.BeginScene() ;
      Canv.Font.Family := FPrinterFontName ;
      Canv.Font.Size := FFontSize ;
