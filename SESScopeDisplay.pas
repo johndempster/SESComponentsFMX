@@ -144,6 +144,8 @@ unit SESScopeDisplay;
   14.07.24 .. JD Printer.Canvas.BeginScene & Printer.Canvas.EndScene now encloses
                  ALL PRINTER DRAWINGa
   23.07.24 .. JD Whole BackBitMap drawing now skipped when DisplayCursorsOnly flag set
+  13.08.24 .. JD Channel colours now defined by TAlphaColor
+                 Multiple signals can now be displayed in a single channel
   }
 
 interface
@@ -208,6 +210,7 @@ type
          xLast : Single ;
          yLast : Single ;
          GridSpacing : single ;
+         NumSignals : Integer ;
          end ;
 
     TMousePos = ( TopLeft,
@@ -249,6 +252,8 @@ type
     VertCursors : Array[0..64] of TScopeChannel ;
     FNumVerticalCursorLinks : Integer ;
     FLinkVerticalCursors : Array[0..2*MaxVerticalCursorLinks-1] of Integer ;
+    FCursorNumberFormat : string ;
+
     FChanZeroAvg : Integer ;
     FTopOfDisplayArea : Single ;
     FBottomOfDisplayArea : Single ;
@@ -312,6 +317,7 @@ type
     FZeroHorizontalCursorColor : TAlphaColor ;
 
     FFixZeroLevels : Boolean ; // True = Zero level cursors fixed at true zero
+    FYAxisNoNegativeRange : Boolean ; // TRUE = Only Position Y axis ranges allowed
 
     FDisplaySelected : Boolean ;
 
@@ -341,6 +347,7 @@ type
     procedure SetNumChannels(Value : Integer ) ;
     procedure SetNumPoints( Value : Integer ) ;
     procedure SetMaxPoints( Value : Integer ) ;
+    function GetNumSignals : Integer ;
 
     procedure SetChanName( Ch : Integer ; Value : string ) ;
     function  GetChanName( Ch : Integer ) : string ;
@@ -368,8 +375,11 @@ type
     procedure SetChanVisible( Ch : Integer ; Value : boolean ) ;
     function GetChanVisible( Ch : Integer ) : Boolean ;
 
-    procedure SetChanColor( Ch : Integer ; Value : TColor ) ;
-    function GetChanColor( Ch : Integer ) : TColor ;
+    procedure SetChanNumSignals( Ch : Integer ; Value : Integer ) ;
+    function GetChanNumSignals( Ch : Integer ) : Integer ;
+
+    procedure SetChanColor( Ch : Integer ; Value : TAlphaColor ) ;
+    function GetChanColor( Ch : Integer ) : TAlphaColor ;
 
     function GetChanGridSpacing( Ch : Integer ) : Single ;
 
@@ -536,7 +546,8 @@ type
     property ChanZeroAvg : Integer read FChanZeroAvg write SetChanZeroAvg ;
     property ChanOffsets[ i : Integer ] : Integer read GetChanOffset write SetChanOffset ;
     property ChanVisible[ i : Integer ] : boolean read GetChanVisible write SetChanVisible ;
-    property ChanColor[ i : Integer ] : TColor read GetChanColor write SetChanColor ;
+    property ChanNumSignals[ i : Integer ] : Integer read GetChanNumSignals write SetChanNumSignals ;
+    property ChanColor[ i : Integer ] : TAlphaColor read GetChanColor write SetChanColor ;
     property ChanGridSpacing[ i : Integer ] : single read GetChanGridSpacing ;
     property TimeGridSpacing : single read FTimeGridSpacing ;
 
@@ -544,10 +555,8 @@ type
     property YMin[ i : Integer ] : single read GetYMin write SetYMin ;
     property YMax[ i : Integer ] : single read GetYMax write SetYMax ;
     property XScreenCoord[ Value : Single ] : Single read GetXScreenCoord ;
-    property HorizontalCursors[ i : Integer ] : single
-             read GetHorCursor write SetHorCursor ;
-    property VerticalCursors[ i : Integer ] : single
-             read GetVertCursor write SetVertCursor ;
+    property HorizontalCursors[ i : Integer ] : single read GetHorCursor write SetHorCursor ;
+    property VerticalCursors[ i : Integer ] : single read GetVertCursor write SetVertCursor ;
 
   published
     { Published declarations }
@@ -576,18 +585,20 @@ type
     property Visible ;
     property Width ;
 
-
-
     Property NumChannels : Integer Read FNumChannels write SetNumChannels ;
     Property NumPoints : Integer Read FNumPoints write SetNumPoints ;
     Property MaxPoints : Integer Read FMaxPoints write SetMaxPoints ;
+    Property NumSignals : Integer read GetNumSignals ;
     property XMin : Integer read FXMin write SetXMin ;
     property XMax : Integer read FXMax write SetXMax ;
     property XOffset : Integer read FXOffset write FXOffset ;
     property CursorsEnabled : Boolean read FCursorsEnabled write FCursorsEnabled ;
+    property YAxisNoNegativeRange : Boolean read FYAxisNoNegativeRange write FYAxisNoNegativeRange ;
 
     property ActiveHorizontalCursor : Integer read FHorCursorSelected ;
     property ActiveVerticalCursor : Integer read FHorCursorSelected ;
+    property CursorNumberFormat : string read FCursorNumberFormat write FCursorNumberFormat ;
+
     property TScale : single read FTScale write FTScale ;
     property TUnits : string read FTUnits write FTUnits ;
     property TCalBar : single read FTCalBar write FTCalBar ;
@@ -778,7 +789,11 @@ begin
      FBuf := Nil ;
      FNumBytesPerSample := 2 ;
      FFloatingPointSamples := False ;
-     for ch := 0 to High(Channel) do begin
+
+     // Default channel settings
+
+     for ch := 0 to High(Channel) do
+         begin
          Channel[ch].InUse := True ;
          Channel[ch].ADCName := format('Ch.%d',[ch]) ;
          Channel[ch].ADCUnits := '' ;
@@ -792,6 +807,7 @@ begin
          Channel[ch].Color := FTraceColor ;
          Channel[ch].ADCZeroAt := -1 ;
          Channel[ch].YSize := 1.0 ;
+         Channel[ch].NumSignals := 1 ;
          end ;
 
      for i := 0 to High(HorCursors) do HorCursors[i].InUse := False ;
@@ -807,6 +823,8 @@ begin
     FOnCursorChange := Nil ;
     FCursorChangeInProgress := False ;
     FFixZeroLevels := False ;
+    FYAxisNoNegativeRange := False ;
+    CursorNumberFormat := '%.4g' ;
 
     FTopOfDisplayArea := 0 ;
     FBottomOfDisplayArea := Round(Height) ;
@@ -1016,6 +1034,7 @@ begin
         { Plot external line on selected channel }
         for i := 0 to High(FLines) do if (FLines[i].Count > 0) then
             begin
+            BackBitmap.Canvas.BeginScene() ;
             iChan := FLines[i].Channel ;
             if Channel[iChan].InUse then
                begin
@@ -1031,6 +1050,7 @@ begin
                    end ;
                BackBitmap.Canvas.Stroke.Assign(KeepPen) ;
                end ;
+               BackBitmap.Canvas.EndScene() ;
             end ;
 
         BackBitmap.Canvas.EndScene ;
@@ -1102,12 +1122,14 @@ procedure TScopeDisplay.PlotRecord(
   Plot a signal record on to a canvas
   ----------------------------------- }
 var
-   ch,i,j,iStep,iPlot : Integer ;
+   ch,i,j,iSig,iStep,iPlot,NumSignals : Integer ;
    XPix,iYMin,iYMax,y1,y2 : Single ;
    XPixRange : Single ;
    YMin,YMax,y : single ;
    P0,P1,P2 : TPointF ;
 begin
+
+//    log.d('PlotRecord');
 
      // Adjust start to point before first requested point so line is continuous
      iStart := Max( iStart - 1, 0) ;
@@ -1121,19 +1143,25 @@ begin
      iStart := Max(Round(FXMin),iStart) ;
      iEnd := Min(Round(FXMax),FNumPoints-1) ;
 
+     NumSignals := GetNumSignals ;
+
+
      { Plot each active channel }
      for ch := 0 to FNumChannels-1 do if Channels[ch].InUse then
+         begin
+
+         for iSig := 0 to Channels[ch].NumSignals-1 do
          begin
 
          Canv.Stroke.Color := Channels[ch].Color ;
          Canv.Stroke.Kind := TBrushKind.Solid ;
 
-         XPixRange := Min( XToCanvasCoord( Channels[ch], iEnd ), Channels[ch].Right )
+            XPixRange := Min( XToCanvasCoord( Channels[ch], iEnd ), Channels[ch].Right )
                       - Max( XToCanvasCoord( Channels[ch], iStart ), Channels[ch].Left ) ;
          XPixRange := Max(XPixRange,2) ;
 
          i := iStart -1 ;
-         j := (i*FNumChannels) + Channels[ch].ADCOffset ;
+         j := (i*NumSignals) + Channels[ch].ADCOffset + iSig ;
          iStep := Max((iEnd - iStart) div Round(XPixRange),1) ;
 
          iPlot := iStart ;
@@ -1200,7 +1228,7 @@ begin
                 end;
 
              Inc(i) ;
-             j := j + FNumChannels ;
+             j := j + NumSignals ;
              until i > iEnd ;
 
          // Display lines indicating area from which "From Record" zero level is derived
@@ -1220,9 +1248,13 @@ begin
             P1.y := P0.y + 30 ;
             Canv.DrawLine( P0, P1, 100.0 ) ;
             end ;
+         end;
+
          end ;
 
      Canv.EndScene ;
+
+//         log.d('Paint Done');
 
      end ;
 
@@ -1250,7 +1282,7 @@ var
    iTick, NumTicks,iSlashPos : Integer ;
    FillBrush : TBrush ;
 begin
-    log.d('PlotAXes');
+//    log.d('PlotAXes');
      Canv.BeginScene() ;
      Canv.Font.Family := FPrinterFontName ;
      Canv.Font.Size := FFontSize ;
@@ -1300,8 +1332,7 @@ begin
          if FXMax = FXMin then FXMax := FXMin + 1 ;
          Channel[ch].xMin := FXMin ;
          Channel[ch].xMax := FXMax ;
-         Channel[ch].xScale := (Channel[ch].Right - Channel[ch].Left) /
-                               (FXMax - FXMin ) ;
+         Channel[ch].xScale := (Channel[ch].Right - Channel[ch].Left) / (FXMax - FXMin) ;
 
          // Update y scale for channels in use
          if Channel[ch].InUse then
@@ -1310,10 +1341,11 @@ begin
             ChannelHeight := Round((Channel[ch].YSize/YTotal)*AvailableHeight) ;
             Channel[ch].Top := cTop ;
             Channel[ch].Bottom := Channel[ch].Top + ChannelHeight ;
-            if Channel[ch].yMax = Channel[ch].yMin then
-               Channel[ch].yMax := Channel[ch].yMin + 1.0 ;
-            Channel[ch].yScale := (Channel[ch].Bottom - Channel[ch].Top) /
-                                  (Channel[ch].yMax - Channel[ch].yMin ) ;
+            // Prevent zero length Y axes
+            if Channel[ch].yMax = Channel[ch].yMin then Channel[ch].yMax := Channel[ch].yMin + 1.0 ;
+            // Positive Y axes
+            if FYAxisNoNegativeRange then Channel[ch].yMin := Max( Channel[ch].yMin, -MaxADCValue/20 ) ;
+            Channel[ch].yScale := (Channel[ch].Bottom - Channel[ch].Top) / (Channel[ch].yMax - Channel[ch].yMin ) ;
             cTop := cTop + ChannelHeight + ChannelSpacing ;
             FBottomOfDisplayArea := Channel[ch].Bottom ;
             end
@@ -1887,7 +1919,7 @@ procedure TScopeDisplay.DrawVerticalCursor(
   Draw vertical cursor
  ------------------------}
 var
-   j,ch,StartCh,EndCh,TChan : Integer ;
+   j,ch,StartCh,EndCh,TChan,NumSignals,iSig : Integer ;
    y,yz,X0,X1,Y0,Y1,xPix : single ;
    s : string ;
    SavedPen : TStrokeBrush ;
@@ -1897,6 +1929,9 @@ begin
      // Skip if off the display
      if (VertCursors[iCurs].Position < Max(Channel[0].XMin,0)) or
         (VertCursors[iCurs].Position > Min(Channel[0].XMax,FMaxPoints)) then Exit ;
+
+
+     NumSignals :=  GetNumSignals ;
 
      // Skip if channel disabled
      ChannelsAvailable := False ;
@@ -1947,29 +1982,23 @@ begin
 
      for ch := StartCh to EndCh do if Channel[ch].InUse then
          begin
+
          // Get cursor name
          s := VertCursors[iCurs].ADCName ;
 
-         // Cursor signal level reading
-         j := (Round(VertCursors[iCurs].Position)*FNumChannels) + Channel[ch].ADCOffset ;
-         if (j >= 0) and (j < (FMaxPoints*FNumChannels)) and (FBuf <> Nil) then
-            begin
-            y := GetSample( FBuf, j, FNumBytesPerSample, FFloatingPointSamples ) ;
-            end
-         else y := 0 ;
 
          // Display time
 
          if ANSIContainsText(VertCursors[iCurs].ADCName,'?t0') and (ch = TChan) then
             begin
             // Display time relative to cursor 0
-            s := s + format('t=%6.5g, ',[(VertCursors[iCurs].Position
+            s := s + format('t=' + FCursorNumberFormat + ', ',[(VertCursors[iCurs].Position
                                         - VertCursors[0].Position)*FTScale]) ;
             end
          else if ANSIContainsText(VertCursors[iCurs].ADCName,'?t') and (ch = TChan) then
             begin
             // Display time relative to start of record
-            s := s + format('t=%6.5g, ',[(VertCursors[iCurs].Position + FXOffset)*FTScale]) ;
+            s := s + format('t=' + FCursorNumberFormat + ', ', [(VertCursors[iCurs].Position + FXOffset)*FTScale]) ;
             end ;
 
          // Display sample index
@@ -1979,36 +2008,49 @@ begin
             end ;
 
          // Display signal level
-         if ANSIContainsText(VertCursors[iCurs].ADCName,'?y0') then
-            begin
-            // Display signal level (relative to cursor 0)
-            j := Round(VertCursors[0].Position)*FNumChannels + Channel[ch].ADCOffset ;
-            if (j >= 0) and (j < (FMaxPoints*FNumChannels)) and (FBuf <> Nil) then begin
-               yz := GetSample( FBuf, j, FNumBytesPerSample, FFloatingPointSamples ) ;
-               end
-            else yz := 0 ;
-            s := s + format('%6.5g %s',[(y-yz)*Channel[ch].ADCScale,Channel[ch].ADCUnits]) ;
-            end
-         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?yd1') then
-              begin
-             // Display signal level (relative to baseline)
-              yz := Channel[ch].ADCZero ;
-              s := s + format('%.1f %s',[(y-yz)*Channel[ch].ADCScale,Channel[ch].ADCUnits]) ;
-              s := AnsiReplaceText(s,'?yd1','') ;
+
+         // Cursor signal level reading
+         for iSig := 0 to Channel[ch].NumSignals-1 do
+             begin
+             // Get signal level
+             j := (Round(VertCursors[iCurs].Position)*NumSignals) + Channel[ch].ADCOffset + iSig ;
+             if (j >= 0) and (j < (FMaxPoints*NumSignals)) and (FBuf <> Nil) then
+                begin
+                y := GetSample( FBuf, j, FNumBytesPerSample, FFloatingPointSamples ) ;
               end
-         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?yd2') then
-              begin
-              // Display signal level (relative to baseline)
-              yz := Channel[ch].ADCZero ;
-              s := s + format('%.2f %s',[(y-yz)*Channel[ch].ADCScale,Channel[ch].ADCUnits]) ;
-              s := AnsiReplaceText(s,'?yd2','') ;
-              end
-         else if ANSIContainsText(VertCursors[iCurs].ADCName,'?y') then
-              begin
-              // Display signal level (relative to baseline)
-              yz := Channel[ch].ADCZero ;
-              s := s + format('%6.5g %s',[(y-yz)*Channel[ch].ADCScale,Channel[ch].ADCUnits]) ;
-              end ;
+             else y := 0 ;
+
+             if ANSIContainsText(VertCursors[iCurs].ADCName,'?y0') then
+                begin
+                // Display signal level (relative to cursor 0)
+                 j := Round(VertCursors[0].Position)*NumSignals + Channel[ch].ADCOffset + iSig ;
+                 if (j >= 0) and (j < (FMaxPoints*NumSignals)) and (FBuf <> Nil) then begin
+                    yz := GetSample( FBuf, j, FNumBytesPerSample, FFloatingPointSamples ) ;
+                  end
+                  else yz := 0 ;
+                  s := s + format(FCursorNumberFormat + ' ',[(y-yz)*Channel[ch].ADCScale]) ;
+                end
+             else if ANSIContainsText(VertCursors[iCurs].ADCName,'?yd1') then
+                 begin
+                 // Display signal level (relative to baseline)
+                 yz := Channel[ch].ADCZero ;
+                 s := s + format('%.1f ',[(y-yz)*Channel[ch].ADCScale]) ;
+                 s := AnsiReplaceText(s,'?yd1','') ;
+                 end
+             else if ANSIContainsText(VertCursors[iCurs].ADCName,'?yd2') then
+                 begin
+                 // Display signal level (relative to baseline)
+                 yz := Channel[ch].ADCZero ;
+                 s := s + format('%.2f ',[(y-yz)*Channel[ch].ADCScale]) ;
+                 s := AnsiReplaceText(s,'?yd2','') ;
+                 end
+             else if ANSIContainsText(VertCursors[iCurs].ADCName,'?y') then
+                  begin
+                  // Display signal level (relative to baseline)
+                  yz := Channel[ch].ADCZero ;
+                  s := s + format(FCursorNumberFormat + ' ',[(y-yz)*Channel[ch].ADCScale]) ;
+                  end ;
+             end ;
 
          // Remove query text
          s := AnsiReplaceText(s,'?t0','') ;
@@ -2030,6 +2072,7 @@ begin
             Y1 := Y0 + Canv.TextHeight(s) ;
             Canv.FillText( RectF(X0,Y0,X1,Y1),s,false,100.0,[],TTextAlign.Leading) ;
             end;
+
          end ;
 
      Canv.EndScene ;
@@ -2143,6 +2186,23 @@ procedure TScopeDisplay.SetNumPoints(
 begin
      FNumPoints :=  Max(Value,1);
      end ;
+
+
+function TScopeDisplay.GetNumSignals : Integer ;
+{ --------------------------------------------------
+  Get the number of signals defined in scope display
+  -------------------------------------------------- }
+var
+    ch : Integer ;
+begin
+     Result := 0 ;
+     for ch := 0 to FNumChannels-1 do
+         begin
+         Result := Result + Channel[ch].NumSignals ;
+         end;
+
+     end ;
+
 
 
 procedure TScopeDisplay.SetMaxPoints(
@@ -2491,9 +2551,34 @@ begin
      end ;
 
 
+function TScopeDisplay.GetChanNumSignals(
+          Ch : Integer
+          ) : Integer ;
+{ -----------------------------------
+  Get no. of signals for this channel
+  ----------------------------------- }
+begin
+     Ch := IntLimitTo(Ch,0,ScopeChannelLimit) ;
+     Result := Channel[Ch].NumSignals ;
+     end ;
+
+
+procedure TScopeDisplay.SetChanNumSignals(
+          Ch : Integer ;
+          Value : Integer
+          ) ;
+{ -------------------------------
+  Set no. of signals for this channel
+  ------------------------------- }
+begin
+     if (ch < 0) or (ch > ScopeChannelLimit) then Exit ;
+     Channel[Ch].NumSignals := Value ;
+     end ;
+
+
 procedure TScopeDisplay.SetChanColor(
           Ch : Integer ;
-          Value : TColor
+          Value : TAlphaColor
           ) ;
 { ----------------------
   Set channel colour
@@ -2506,7 +2591,7 @@ begin
 
 function TScopeDisplay.GetChanColor(
           Ch : Integer
-          ) : TColor ;
+          ) : TAlphaColor ;
 { ----------------------
   Get channel colour
   ---------------------- }
@@ -4233,13 +4318,13 @@ procedure TScopeDisplay.AddPointToLine(
   ---------------------------}
 var
    iChan,nCount : Integer ;
-   x0,y0,x1,y1 : single ;
-   KeepPen : TStrokeBrush ;
+   //x0,y0,x1,y1 : single ;
+ //  KeepPen : TStrokeBrush ;
 begin
 
      if FLines[iLine].x = Nil then exit ;
 
-     KeepPen := TStrokeBrush.Create( TBrushKind.Solid, TAlphaColors.Black ) ;
+  //   KeepPen := TStrokeBrush.Create( TBrushKind.Solid, TAlphaColors.Black ) ;
 
      { Add x,y point to array }
      nCount := FLines[iLine].Count ;
@@ -4248,7 +4333,7 @@ begin
      FLines[iLine].y^[nCount] := y ;
 
      { Add line to end of plot }
-     if nCount > 0 then
+{     if nCount > 0 then
         begin
         KeepPen.Assign(Canvas.Stroke) ;
         Canvas.Stroke.Assign(FLines[iLine].Pen) ;
@@ -4258,11 +4343,11 @@ begin
         y1 := YToCanvasCoord( Channel[iChan], y ) ;
         Canvas.DrawLine( PointF(X0,Y0), PointF(x1,y1),100.0 ) ;
         Canvas.Stroke.Assign(KeepPen) ;
-        end ;
+        end ;}
 
      if nCount < High(TSinglePointArray) then Inc(nCount) ;
      FLines[iLine].Count := nCount ;
-     KeepPen.Free ;
+//     KeepPen.Free ;
 
      end ;
 
