@@ -2,27 +2,27 @@
 <BorlandProject>
 	<Transactions>
     <Transaction>2020/03/26 14:46:40.000.007,=rtl.dcp</Transaction>
-    <Transaction>2020/03/26 14:48:09.000.256,C:\Users\John\Documents\Embarcadero\Studio\Projects\Package1.dproj=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\SESComponentsFMX.dproj</Transaction>
+    <Transaction>2020/03/26 14:48:09.000.256,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\SESComponentsFMX.dproj=C:\Users\John\Documents\Embarcadero\Studio\Projects\Package1.dproj</Transaction>
     <Transaction>2020/03/27 11:48:46.000.635,=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\ValidatedEdit.pas</Transaction>
     <Transaction>2020/03/30 14:30:50.000.057,=fmx.dcp</Transaction>
     <Transaction>2020/03/30 14:46:26.000.275,=rtl.dcp</Transaction>
     <Transaction>2020/03/30 14:46:35.000.999,=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\ValidatedEdit.pas</Transaction>
-    <Transaction>2020/03/30 14:46:36.000.018,=xmlrtl.dcp</Transaction>
     <Transaction>2020/03/30 14:46:36.000.011,=vclactnband.dcp</Transaction>
-    <Transaction>2020/03/30 14:46:36.000.006,=vcl.dcp</Transaction>
-    <Transaction>2020/03/30 14:46:36.000.014,=vclx.dcp</Transaction>
     <Transaction>2020/03/30 14:46:36.000.003,=designide.dcp</Transaction>
+    <Transaction>2020/03/30 14:46:36.000.014,=vclx.dcp</Transaction>
+    <Transaction>2020/03/30 14:46:36.000.018,=xmlrtl.dcp</Transaction>
+    <Transaction>2020/03/30 14:46:36.000.006,=vcl.dcp</Transaction>
     <Transaction>2020/03/30 14:46:42.000.816,=fmx.dcp</Transaction>
-    <Transaction>2020/03/30 15:00:51.000.313,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\ValidatedEdit.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\ValidatedEditFMX.pas</Transaction>
+    <Transaction>2020/03/30 15:00:51.000.313,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\ValidatedEditFMX.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\ValidatedEdit.pas</Transaction>
     <Transaction>2020/03/31 10:32:25.000.253,=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\Unit1.pas</Transaction>
-    <Transaction>2020/03/31 10:32:47.000.726,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnits.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\Unit1.pas</Transaction>
+    <Transaction>2020/03/31 10:32:47.000.726,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\Unit1.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnits.pas</Transaction>
     <Transaction>2020/03/31 11:13:25.000.543,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnits.pas=</Transaction>
     <Transaction>2020/03/31 11:13:33.000.216,=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnits.pas</Transaction>
     <Transaction>2020/03/31 12:20:05.000.058,=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnitsStyle.pas</Transaction>
-    <Transaction>2020/03/31 12:28:36.000.818,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnitsStyle.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnits.Style.pas</Transaction>
+    <Transaction>2020/03/31 12:28:36.000.818,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnits.Style.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnitsStyle.pas</Transaction>
     <Transaction>2020/03/31 15:09:29.000.569,=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumbersBoxExt.pas</Transaction>
-    <Transaction>2020/03/31 15:10:08.000.740,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumbersBoxExt.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxExt.pas</Transaction>
-    <Transaction>2020/04/01 11:07:41.000.057,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\SESNumberBox.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\ValidatedEditFMX.pas</Transaction>
+    <Transaction>2020/03/31 15:10:08.000.740,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxExt.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumbersBoxExt.pas</Transaction>
+    <Transaction>2020/04/01 11:07:41.000.057,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\ValidatedEditFMX.pas=C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\SESNumberBox.pas</Transaction>
     <Transaction>2020/04/01 11:24:33.000.739,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxExt.pas=</Transaction>
     <Transaction>2020/04/01 11:24:39.000.293,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnits.pas=</Transaction>
     <Transaction>2020/04/01 11:24:45.000.480,C:\Users\John\Documents\Embarcadero\Studio\Projects\SESComponentsFMX\NumberBoxWithUnits.Style.pas=</Transaction>
