@@ -146,6 +146,7 @@ unit SESScopeDisplay;
   23.07.24 .. JD Whole BackBitMap drawing now skipped when DisplayCursorsOnly flag set
   13.08.24 .. JD Channel colours now defined by TAlphaColor
                  Multiple signals can now be displayed in a single channel
+  04.09.24 .. JD Second and subsequent traces on each channel now black
   }
 
 interface
@@ -1153,7 +1154,9 @@ begin
          for iSig := 0 to Channels[ch].NumSignals-1 do
          begin
 
-         Canv.Stroke.Color := Channels[ch].Color ;
+         // Second and subsequent traces on channel are black
+         if iSig = 0 then Canv.Stroke.Color := Channels[ch].Color
+                     else Canv.Stroke.Color := TAlphaColors.Black ;
          Canv.Stroke.Kind := TBrushKind.Solid ;
 
             XPixRange := Min( XToCanvasCoord( Channels[ch], iEnd ), Channels[ch].Right )
